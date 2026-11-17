@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AERO-COMMAND // Air Force Tactical & 3D Aerospace Portal</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Three.js (r128) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- Google Fonts: Rajdhani (Tactical Headings), Inter (UI), JetBrains Mono (Telemetry HUD) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Rajdhani', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            navy: {
+              950: '#040812',
+              900: '#070e1e',
+              800: '#0c1832',
+              700: '#13254a',
+            },
+            hud: {
+              cyan: '#00f0ff',
+              amber: '#ffb000',
+              emerald: '#10b981',
+              crimson: '#ff3355',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Custom Tactical Aesthetics & Grid Overlays */
+    body {
+      background-color: #040812;
+      color: #e2e8f0;
+      overflow-x: hidden;
+    }
+
+    .tactical-grid {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+    }
+
+    .hud-panel {
+      background: linear-gradient(135deg, rgba(12, 24, 50, 0.72) 0%, rgba(7, 14, 30, 0.88) 100%);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(0, 240, 255, 0.22);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(0, 240, 255, 0.04);
+    }
+
+    .hud-corner {
+      position: relative;
+    }
+    .hud-corner::before,
+    .hud-corner::after {
+      content: '';
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      pointer-events: none;
+    }
+    .hud-corner::before {
+      top: -1px;
+      left: -1px;
+      border-top: 2px solid #00f0ff;
+      border-left: 2px solid #00f0ff;
+    }
+    .hud-corner::after {
+      bottom: -1px;
+      right: -1px;
+      border-bottom: 2px solid #00f0ff;
+      border-right: 2px solid #00f0ff;
+    }
+
+    /* Radar Sweep Animation */
+    @keyframes radarSpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .radar-sweep {
+      background: conic-gradient(from 0deg, rgba(0, 240, 255, 0.35) 0deg, rgba(0, 240, 255, 0.0) 75deg, transparent 360deg);
+      animation: radarSpin 4s linear infinite;
+    }
+
+    /* Subtle Scanline Overlay */
+    .scanlines {
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.25) 50%
+      );
+      background-size: 100% 4px;
+    }
+
+    canvas {
+      display: block;
+      outline: none;
+      cursor: grab;
+    }
+    canvas:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body class="tactical-grid antialiased selection:bg-hud-cyan selection:text-navy-950">
+
+  <!-- ==================== TOP NAVIGATION BAR ==================== -->
+  <header class="fixed top-0 inset-x-0 z-50 bg-navy-950/85 backdrop-blur-md border-b border-cyan-500/20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Brand Emblem -->
+      <a href="#hero" class="flex items-center gap-3 group">
+        <div class="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-400/50 flex items-center justify-center group-hover:border-hud-cyan transition">
+          <!-- Custom SVG Air Force Tactical Wing Emblem -->
+          <svg class="w-5 h-5 text-hud-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 12l10 3 10-3L12 2z" />
+            <path d="M12 15v7" />
+            <path d="M7 18l5 4 5-4" />
+          </svg>
+        </div>
+        <div>
+          <span class="font-display font-bold text-xl tracking-wider text-white">STRATOS<span class="text-hud-cyan">//AF</span></span>
+          <span class="hidden sm:block font-mono text-[10px] text-cyan-400/70 tracking-widest uppercase">Global Aerospace Command</span>
+        </div>
+      </a>
+
+      <!-- Navigation Links -->
+      <nav class="hidden md:flex items-center gap-8 font-display font-semibold tracking-wider text-sm uppercase">
+        <a href="#hero" class="text-slate-300 hover:text-hud-cyan transition">3D Interceptor</a>
+        <a href="#fleet-showcase" class="text-slate-300 hover:text-hud-cyan transition">Fleet Hangar</a>
+        <a href="#missions" class="text-slate-300 hover:text-hud-cyan transition">Core Missions</a>
+        <a href="#telemetry-deck" class="text-slate-300 hover:text-hud-cyan transition">Flight Telemetry</a>
+        <a href="#milestones" class="text-slate-300 hover:text-hud-cyan transition">Milestones</a>
+      </nav>
+
+      <!-- Live System Status Pill -->
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 font-mono text-xs text-emerald-400">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>DEFCON 5 // NOMINAL</span>
+        </div>
+        <a href="#fleet-showcase" class="px-4 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 font-display font-semibold text-sm tracking-wider text-hud-cyan uppercase transition">
+          Launch Hangar
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== 1. HERO SECTION WITH INTERACTIVE 3D FIGHTER JET ==================== -->
+  <section id="hero" class="relative min-h-screen pt-20 pb-12 flex items-center overflow-hidden border-b border-cyan-500/15">
+    <!-- Full-Bleed Interactive Three.js Canvas Container -->
+    <div id="hero-canvas-container" class="absolute inset-0 z-0"></div>
+
+    <!-- Subtle Vignette & Radial Glow -->
+    <div class="pointer-events-none absolute inset-0 bg-gradient-to-r from-navy-950/90 via-navy-950/40 to-transparent z-10"></div>
+    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-navy-950 to-transparent z-10"></div>
+
+    <!-- Hero Foreground Content & 3D View Controls -->
+    <div class="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pointer-events-none">
+      
+      <!-- Left Column: Tactical Briefing -->
+      <div class="lg:col-span-6 space-y-6 pointer-events-auto">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-cyan-500/10 border border-cyan-400/30 font-mono text-xs text-hud-cyan tracking-widest uppercase">
+          <span>SYS.ID // XF-29A RAPTOR-X STEALTH</span>
+        </div>
+
+        <h1 class="font-display font-bold text-4xl sm:text-6xl lg:text-7xl tracking-tight text-white uppercase leading-[0.95]">
+          Air Dominance <br />
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-hud-cyan via-sky-300 to-hud-amber">
+            Beyond the Horizon
+          </span>
+        </h1>
+
+        <p class="text-slate-300 text-base sm:text-lg max-w-xl leading-relaxed">
+          Next-generation fifth-and-sixth generation aerospace superiority. Inspect our procedural 3D tactical interceptor in real time—drag to orbit, scroll to zoom, and toggle flight telemetry overlays.
+        </p>
+
+        <!-- Interactive 3D Mode Switcher Controls -->
+        <div class="hud-panel hud-corner rounded-xl p-4 max-w-xl space-y-3">
+          <div class="flex items-center justify-between font-mono text-xs text-slate-400">
+            <span>3D RENDER MODE // INTERACTIVE</span>
+            <span class="text-hud-cyan">DRAG TO ROTATE • SCROLL TO ZOOM</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="btn-hero-stealth" onclick="setHeroMode('stealth')" class="px-3.5 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider bg-hud-cyan text-navy-950 shadow-lg shadow-cyan-500/25 transition">
+              Stealth Composite
+            </button>
+            <button id="btn-hero-wireframe" onclick="setHeroMode('wireframe')" class="px-3.5 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider bg-navy-800/90 text-slate-200 border border-cyan-500/30 hover:border-hud-cyan transition">
+              Radar Wireframe
+            </button>
+            <button id="btn-hero-blueprint" onclick="setHeroMode('blueprint')" class="px-3.5 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider bg-navy-800/90 text-slate-200 border border-cyan-500/30 hover:border-hud-cyan transition">
+              Thermal Blueprint
+            </button>
+            <button id="btn-hero-afterburner" onclick="toggleAfterburner()" class="px-3.5 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider bg-amber-500/20 text-hud-amber border border-amber-500/40 hover:bg-amber-500/30 transition">
+              Afterburner: MAX
+            </button>
+          </div>
+        </div>
+
+        <!-- Key Quick Stats -->
+        <div class="grid grid-cols-3 gap-4 max-w-xl pt-2">
+          <div class="border-l-2 border-hud-cyan pl-3">
+            <div class="font-mono text-xs text-slate-400">TOP VELOCITY</div>
+            <div class="font-display font-bold text-2xl text-white">MACH 2.45</div>
+          </div>
+          <div class="border-l-2 border-hud-amber pl-3">
+            <div class="font-mono text-xs text-slate-400">RADAR CROSS-SEC</div>
+            <div class="font-display font-bold text-2xl text-white">0.0001 m²</div>
+          </div>
+          <div class="border-l-2 border-emerald-400 pl-3">
+            <div class="font-mono text-xs text-slate-400">CEILING</div>
+            <div class="font-display font-bold text-2xl text-white">65,000 FT</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Floating Live HUD Orientation Reticle -->
+      <div class="lg:col-span-6 flex justify-end items-end h-full">
+        <div class="hud-panel rounded-xl p-4 w-full sm:w-72 font-mono text-xs space-y-2 pointer-events-auto border-cyan-400/30">
+          <div class="flex items-center justify-between text-hud-cyan border-b border-cyan-500/20 pb-1.5">
+            <span>ATTITUDE TELEMETRY</span>
+            <span id="hero-fps" class="text-emerald-400">60 FPS</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">PITCH / BANK:</span>
+            <span id="hero-attitude" class="text-white">+04.2° / -12.0°</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">THRUST VECTOR:</span>
+            <span id="hero-thrust" class="text-hud-amber">108% MIL-PWR</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-400">AVIONICS LINK:</span>
+            <span class="text-emerald-400">ENCRYPTED // SAT-7</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 2. INTERACTIVE 3D FLEET & ASSET SHOWCASE ==================== -->
+  <section id="fleet-showcase" class="py-20 relative border-b border-cyan-500/15">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Section Header -->
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+        <div>
+          <span class="font-mono text-xs text-hud-cyan tracking-widest uppercase">// TACTICAL 3D HANGAR INSPECTION</span>
+          <h2 class="font-display font-bold text-3xl sm:text-5xl text-white uppercase mt-1">
+            Aerospace Fleet &amp; Orbital Assets
+          </h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm">
+          Select an Air Force platform below to inspect its multi-part 3D geometry, aerodynamic profile, and live mission capabilities.
+        </p>
+      </div>
+
+      <!-- Asset Selector Tabs -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <button onclick="selectFleetAsset('fighter')" id="tab-fighter" class="fleet-tab active hud-panel rounded-xl p-4 text-left border-2 border-hud-cyan transition">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs text-hud-cyan">AIR SUPERIORITY</span>
+            <span class="px-2 py-0.5 rounded bg-cyan-500/20 font-mono text-[10px] text-hud-cyan">GEN-6</span>
+          </div>
+          <div class="font-display font-bold text-xl text-white mt-1">F/A-37 VANGUARD STEALTH</div>
+          <div class="text-xs text-slate-400 mt-0.5">Multi-role Twin-Engine Tactical Fighter</div>
+        </button>
+
+        <button onclick="selectFleetAsset('transport')" id="tab-transport" class="fleet-tab hud-panel rounded-xl p-4 text-left border border-cyan-500/20 hover:border-cyan-400/50 transition">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs text-hud-amber">GLOBAL AIRLIFT</span>
+            <span class="px-2 py-0.5 rounded bg-amber-500/20 font-mono text-[10px] text-hud-amber">HEAVY</span>
+          </div>
+          <div class="font-display font-bold text-xl text-white mt-1">C-190 TITAN ATLAS</div>
+          <div class="text-xs text-slate-400 mt-0.5">Strategic Quad-Turboprop / Jet Heavy Lifter</div>
+        </button>
+
+        <button onclick="selectFleetAsset('satellite')" id="tab-satellite" class="fleet-tab hud-panel rounded-xl p-4 text-left border border-cyan-500/20 hover:border-cyan-400/50 transition">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs text-emerald-400">ORBITAL ISR</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-500/20 font-mono text-[10px] text-emerald-400">LEO-SAT</span>
+          </div>
+          <div class="font-display font-bold text-xl text-white mt-1">KH-14 AEGIS SENTINEL</div>
+          <div class="text-xs text-slate-400 mt-0.5">Hyperspectral Recon Satellite &amp; Solar Array</div>
+        </button>
+      </div>
+
+      <!-- Main 3D Hangar Viewer + Telemetry Readout Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        
+        <!-- 3D Hangar Viewport (8 Columns) -->
+        <div class="lg:col-span-8 hud-panel hud-corner rounded-2xl overflow-hidden relative min-h-[420px] sm:min-h-[500px] flex flex-col">
+          <!-- Top Overlay Bar inside Viewport -->
+          <div class="absolute top-4 inset-x-4 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+            <div class="px-3 py-1.5 rounded-lg bg-navy-950/80 border border-cyan-500/30 font-mono text-xs text-hud-cyan">
+              VIEWPORT // <span id="hangar-model-code">XF-37-BLK4</span>
+            </div>
+            <div class="flex items-center gap-2 pointer-events-auto">
+              <button onclick="toggleHangarAutoRotate()" id="btn-hangar-rotate" class="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 font-mono text-xs text-hud-cyan transition">
+                AUTO-ORBIT: ON
+              </button>
+              <button onclick="resetHangarCamera()" class="px-3 py-1.5 rounded-lg bg-navy-900/90 hover:bg-navy-800 border border-slate-600 font-mono text-xs text-slate-200 transition">
+                RESET VIEW
+              </button>
+            </div>
+          </div>
+
+          <!-- Three.js Hangar Canvas -->
+          <div id="hangar-canvas-container" class="w-full h-full flex-1 min-h-[420px]"></div>
+
+          <!-- Bottom Instruction Hint -->
+          <div class="absolute bottom-3 inset-x-4 z-10 flex items-center justify-between pointer-events-none font-mono text-[11px] text-slate-400">
+            <span>LMB / TOUCH DRAG: ORBIT 360°</span>
+            <span>SCROLL / PINCH: ZOOM</span>
+          </div>
+        </div>
+
+        <!-- Dynamic HUD Telemetry & Specs Panel (4 Columns) -->
+        <div class="lg:col-span-4 hud-panel rounded-2xl p-6 flex flex-col justify-between space-y-6">
+          <div>
+            <div class="flex items-center justify-between border-b border-cyan-500/20 pb-3">
+              <span class="font-mono text-xs text-hud-cyan uppercase tracking-wider">SPECIFICATION MATRIX</span>
+              <span id="spec-status" class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono text-[11px]">ACTIVE SERVICE</span>
+            </div>
+
+            <h3 id="spec-title" class="font-display font-bold text-2xl text-white mt-4">
+              F/A-37 VANGUARD STEALTH
+            </h3>
+            <p id="spec-desc" class="text-sm text-slate-300 mt-2 leading-relaxed">
+              Twin-engine, all-weather tactical stealth fighter engineered for air dominance, electronic warfare, and deep-strike precision missions with vectored thrust nozzles.
+            </p>
+
+            <!-- Telemetry Bars -->
+            <div class="space-y-4 mt-6 font-mono text-xs">
+              <div>
+                <div class="flex justify-between mb-1">
+                  <span class="text-slate-400">MAX SPEED</span>
+                  <span id="spec-speed" class="text-white font-bold">MACH 2.45 (1,880 MPH)</span>
+                </div>
+                <div class="w-full h-1.5 bg-navy-950 rounded-full overflow-hidden">
+                  <div id="bar-speed" class="h-full bg-hud-cyan rounded-full transition-all duration-500" style="width: 92%"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between mb-1">
+                  <span class="text-slate-400">SERVICE CEILING</span>
+                  <span id="spec-ceiling" class="text-white font-bold">65,000 FT (19.8 KM)</span>
+                </div>
+                <div class="w-full h-1.5 bg-navy-950 rounded-full overflow-hidden">
+                  <div id="bar-ceiling" class="h-full bg-hud-amber rounded-full transition-all duration-500" style="width: 85%"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between mb-1">
+                  <span class="text-slate-400">COMBAT RADIUS / RANGE</span>
+                  <span id="spec-range" class="text-white font-bold">1,850 NMI</span>
+                </div>
+                <div class="w-full h-1.5 bg-navy-950 rounded-full overflow-hidden">
+                  <div id="bar-range" class="h-full bg-emerald-400 rounded-full transition-all duration-500" style="width: 74%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Avionics & Armament Summary Box -->
+          <div class="bg-navy-950/70 border border-cyan-500/20 rounded-xl p-4 space-y-2 font-mono text-xs">
+            <div class="text-hud-cyan font-semibold">PRIMARY AVIONICS SUITE</div>
+            <div id="spec-avionics" class="text-slate-300 leading-relaxed">
+              AN/APG-99 AESA Radar • Distributed Aperture Infrared System • AI Wingman Data-Link
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 3. CORE MISSIONS & CAPABILITIES ==================== -->
+  <section id="missions" class="py-20 relative border-b border-cyan-500/15">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-14">
+        <span class="font-mono text-xs text-hud-cyan tracking-widest uppercase">// DOCTRINE &amp; OPERATIONAL PILLARS</span>
+        <h2 class="font-display font-bold text-3xl sm:text-5xl text-white uppercase mt-2">
+          Core Aerospace Missions
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base mt-3">
+          Integrated multi-domain command synchronizing atmospheric air superiority, rapid global logistics, and orbital reconnaissance.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Mission 1 -->
+        <div class="hud-panel hud-corner rounded-2xl p-6 hover:-translate-y-1 transition duration-300">
+          <div class="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center text-hud-cyan mb-5">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 2L4 20l8-4 8 4L12 2z" />
+            </svg>
+          </div>
+          <div class="font-mono text-xs text-hud-cyan mb-1">01 // DOMINANCE</div>
+          <h3 class="font-display font-bold text-2xl text-white mb-2">Air Superiority</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            Control of the skies through low-observable stealth interceptors, hypersonic stand-off weaponry, and suppression of enemy air defenses.
+          </p>
+        </div>
+
+        <!-- Mission 2 -->
+        <div class="hud-panel hud-corner rounded-2xl p-6 hover:-translate-y-1 transition duration-300">
+          <div class="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-hud-amber mb-5">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M3 15h18M5 10h14l2 5H3l2-5zM9 10V6h6v4" />
+            </svg>
+          </div>
+          <div class="font-mono text-xs text-hud-amber mb-1">02 // LOGISTICS</div>
+          <h3 class="font-display font-bold text-2xl text-white mb-2">Global Mobility</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            Rapid strategic airlift and aerial refueling tankers projecting humanitarian relief and tactical payloads anywhere on Earth within hours.
+          </p>
+        </div>
+
+        <!-- Mission 3 -->
+        <div class="hud-panel hud-corner rounded-2xl p-6 hover:-translate-y-1 transition duration-300">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-400/40 flex items-center justify-center text-emerald-400 mb-5">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a8 8 0 1 0-14.8 0M2 12h2M20 12h2M12 2v2M12 20v2" />
+            </svg>
+          </div>
+          <div class="font-mono text-xs text-emerald-400 mb-1">03 // RECONNAISSANCE</div>
+          <h3 class="font-display font-bold text-2xl text-white mb-2">Global ISR</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            Persistent Intelligence, Surveillance, and Reconnaissance via high-altitude autonomous UAVs and synthetic aperture radar platforms.
+          </p>
+        </div>
+
+        <!-- Mission 4 -->
+        <div class="hud-panel hud-corner rounded-2xl p-6 hover:-translate-y-1 transition duration-300">
+          <div class="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-400/40 flex items-center justify-center text-purple-400 mb-5">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M12 2a10 10 0 1 0 10 10H12V2z" />
+              <path d="M21.18 8.02A10 10 0 0 0 15.98 2.82" />
+            </svg>
+          </div>
+          <div class="font-mono text-xs text-purple-400 mb-1">04 // ORBIT &amp; SPECTRUM</div>
+          <h3 class="font-display font-bold text-2xl text-white mb-2">Space &amp; Cyber Ops</h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            Resilient satellite communications, missile warning constellations, and electromagnetic spectrum defense across contested theaters.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 4. INTERACTIVE FLIGHT DECK & RADAR TELEMETRY SIMULATOR ==================== -->
+  <section id="telemetry-deck" class="py-20 relative border-b border-cyan-500/15">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="mb-10">
+        <span class="font-mono text-xs text-hud-cyan tracking-widest uppercase">// LIVE AVIONICS SIMULATION</span>
+        <h2 class="font-display font-bold text-3xl sm:text-5xl text-white uppercase mt-1">
+          Tactical Flight Deck &amp; Radar Sweep
+        </h2>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <!-- Radar Scope (5 Columns) -->
+        <div class="lg:col-span-5 hud-panel rounded-2xl p-6 flex flex-col items-center justify-center">
+          <div class="w-full flex justify-between font-mono text-xs text-slate-400 mb-4">
+            <span>AN/APG-99 RADAR</span>
+            <span class="text-hud-cyan">RANGE: 160 NMI</span>
+          </div>
+
+          <!-- Circular Tactical Radar Display -->
+          <div class="relative w-64 h-64 sm:w-72 sm:h-72 rounded-full border-2 border-cyan-500/40 bg-navy-950 overflow-hidden shadow-[inset_0_0_30px_rgba(0,240,255,0.15)]">
+            <!-- Concentric Range Rings -->
+            <div class="absolute inset-8 rounded-full border border-cyan-500/20"></div>
+            <div class="absolute inset-16 rounded-full border border-cyan-500/20"></div>
+            <div class="absolute inset-24 rounded-full border border-cyan-500/20"></div>
+            <!-- Crosshairs -->
+            <div class="absolute inset-x-0 top-1/2 h-px bg-cyan-500/25"></div>
+            <div class="absolute inset-y-0 left-1/2 w-px bg-cyan-500/25"></div>
+            <!-- Rotating Radar Sweep -->
+            <div class="absolute inset-0 radar-sweep rounded-full"></div>
+
+            <!-- Simulated Radar Contacts -->
+            <div class="absolute top-14 left-20 flex items-center gap-1">
+              <span class="w-2.5 h-2.5 rounded-full bg-hud-amber animate-pulse"></span>
+              <span class="font-mono text-[9px] text-hud-amber">TRK-01</span>
+            </div>
+            <div class="absolute bottom-16 right-16 flex items-center gap-1">
+              <span class="w-2.5 h-2.5 rounded-full bg-hud-cyan animate-ping"></span>
+              <span class="font-mono text-[9px] text-hud-cyan">ALLY-4</span>
+            </div>
+            <div class="absolute top-24 right-14 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-hud-crimson animate-pulse"></span>
+              <span class="font-mono text-[9px] text-hud-crimson">BOGEY-9</span>
+            </div>
+          </div>
+
+          <div class="w-full flex justify-between font-mono text-xs text-slate-400 mt-4 pt-3 border-t border-cyan-500/20">
+            <span>IFF: INTERROGATING</span>
+            <span class="text-emerald-400">3 CONTACTS TRACKED</span>
+          </div>
+        </div>
+
+        <!-- Interactive Flight Controls & Digital HUD Gauges (7 Columns) -->
+        <div class="lg:col-span-7 hud-panel hud-corner rounded-2xl p-6 sm:p-8 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/20 pb-4">
+            <div>
+              <h3 class="font-display font-bold text-2xl text-white uppercase">Interactive Flight Envelope</h3>
+              <p class="text-xs text-slate-400">Adjust throttle, altitude, and heading to compute live Mach &amp; G-load telemetry.</p>
+            </div>
+            <span id="flight-regime-badge" class="px-3 py-1 rounded-md bg-cyan-500/15 border border-cyan-400/40 font-mono text-xs text-hud-cyan">
+              SUPERCRUISE
+            </span>
+          </div>
+
+          <!-- Digital Readout Cards -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono">
+            <div class="bg-navy-950/80 border border-cyan-500/20 rounded-xl p-3">
+              <div class="text-[11px] text-slate-400">AIRSPEED</div>
+              <div id="hud-airspeed" class="text-xl sm:text-2xl font-bold text-hud-cyan mt-1">1,120 KT</div>
+              <div id="hud-mach" class="text-[11px] text-slate-400 mt-0.5">MACH 1.69</div>
+            </div>
+
+            <div class="bg-navy-950/80 border border-cyan-500/20 rounded-xl p-3">
+              <div class="text-[11px] text-slate-400">ALTITUDE</div>
+              <div id="hud-altitude" class="text-xl sm:text-2xl font-bold text-white mt-1">42,000 FT</div>
+              <div class="text-[11px] text-emerald-400 mt-0.5">FL420</div>
+            </div>
+
+            <div class="bg-navy-950/80 border border-cyan-500/20 rounded-xl p-3">
+              <div class="text-[11px] text-slate-400">HEADING</div>
+              <div id="hud-heading" class="text-xl sm:text-2xl font-bold text-hud-amber mt-1">285° WNW</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">MAGNETIC</div>
+            </div>
+
+            <div class="bg-navy-950/80 border border-cyan-500/20 rounded-xl p-3">
+              <div class="text-[11px] text-slate-400">G-FORCE / FUEL</div>
+              <div id="hud-gforce" class="text-xl sm:text-2xl font-bold text-emerald-400 mt-1">1.4 G</div>
+              <div id="hud-fuel" class="text-[11px] text-slate-400 mt-0.5">FLOW: 8,400 PPH</div>
+            </div>
+          </div>
+
+          <!-- Interactive Sliders -->
+          <div class="space-y-4 pt-2 font-mono text-xs">
+            <div>
+              <div class="flex justify-between mb-1">
+                <label for="slider-throttle" class="text-slate-300">ENGINE THROTTLE (%)</label>
+                <span id="val-throttle" class="text-hud-cyan font-bold">85%</span>
+              </div>
+              <input id="slider-throttle" type="range" min="30" max="110" value="85" class="w-full accent-cyan-400 cursor-pointer" oninput="updateFlightTelemetry()" />
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-1">
+                <label for="slider-altitude" class="text-slate-300">TARGET ALTITUDE (FT)</label>
+                <span id="val-altitude" class="text-white font-bold">42,000 FT</span>
+              </div>
+              <input id="slider-altitude" type="range" min="5000" max="65000" step="1000" value="42000" class="w-full accent-amber-400 cursor-pointer" oninput="updateFlightTelemetry()" />
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-1">
+                <label for="slider-heading" class="text-slate-300">COMPASS HEADING (DEG)</label>
+                <span id="val-heading" class="text-hud-amber font-bold">285°</span>
+              </div>
+              <input id="slider-heading" type="range" min="0" max="359" value="285" class="w-full accent-emerald-400 cursor-pointer" oninput="updateFlightTelemetry()" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 5. AVIATION MILESTONES ==================== -->
+  <section id="milestones" class="py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="mb-12">
+        <span class="font-mono text-xs text-hud-cyan tracking-widest uppercase">// AEROSPACE CHRONOLOGY</span>
+        <h2 class="font-display font-bold text-3xl sm:text-5xl text-white uppercase mt-1">
+          Milestones in Flight Supremacy
+        </h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="hud-panel rounded-xl p-6 border-t-2 border-t-hud-cyan">
+          <div class="font-mono text-sm font-bold text-hud-cyan">1947</div>
+          <h3 class="font-display font-bold text-xl text-white mt-1">Breaking the Sound Barrier</h3>
+          <p class="text-sm text-slate-400 mt-2">
+            Rocket-powered experimental flight achieves Mach 1.06 in level flight, inaugurating the supersonic aerospace era.
+          </p>
+        </div>
+
+        <div class="hud-panel rounded-xl p-6 border-t-2 border-t-hud-amber">
+          <div class="font-mono text-sm font-bold text-hud-amber">1976</div>
+          <h3 class="font-display font-bold text-xl text-white mt-1">Mach 3+ Strategic Recon</h3>
+          <p class="text-sm text-slate-400 mt-2">
+            Titanium-hulled reconnaissance aircraft sustain speeds above Mach 3.2 at 85,000 feet, outrunning all surface threats.
+          </p>
+        </div>
+
+        <div class="hud-panel rounded-xl p-6 border-t-2 border-t-emerald-400">
+          <div class="font-mono text-sm font-bold text-emerald-400">1989</div>
+          <h3 class="font-display font-bold text-xl text-white mt-1">Low-Observable Stealth</h3>
+          <p class="text-sm text-slate-400 mt-2">
+            Faceted airframes and radar-absorbent composites redefine air warfare by rendering strike aircraft virtually invisible to radar.
+          </p>
+        </div>
+
+        <div class="hud-panel rounded-xl p-6 border-t-2 border-t-purple-400">
+          <div class="font-mono text-sm font-bold text-purple-400">2026+</div>
+          <h3 class="font-display font-bold text-xl text-white mt-1">Autonomous Collaborative Combat</h3>
+          <p class="text-sm text-slate-400 mt-2">
+            Sixth-generation manned fighters paired with AI-driven loyal wingman drones and orbital sensor fusion networks.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="bg-navy-950 border-t border-cyan-500/20 py-10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="font-display font-bold text-lg tracking-wider text-white">STRATOS<span class="text-hud-cyan">//AF</span></span>
+        <span class="font-mono text-xs text-slate-500">INTERACTIVE 3D AEROSPACE SHOWCASE</span>
+      </div>
+      <div class="font-mono text-xs text-slate-400">
+        ALL 3D GEOMETRY PROCEDURALLY RENDERED VIA WEBGL / THREE.JS
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==================== JAVASCRIPT: THREE.JS 3D MODELS & INTERACTIVITY ==================== -->
+  <script>
+    /**
+     * Procedural Three.js Aircraft & Aerospace Mesh Builders
+     * Zero external textures or models required — 100% self-contained procedural geometry.
+     */
+
+    // Shared Materials Helper
+    function createMaterials() {
+      return {
+        stealthBody: new THREE.MeshStandardMaterial({
+          color: 0x263244,
+          metalness: 0.72,
+          roughness: 0.32,
+          flatShading: true
+        }),
+        darkTrim: new THREE.MeshStandardMaterial({
+          color: 0x111827,
+          metalness: 0.8,
+          roughness: 0.25
+        }),
+        canopyGold: new THREE.MeshPhysicalMaterial({
+          color: 0xffaa00,
+          emissive: 0x331a00,
+          metalness: 0.9,
+          roughness: 0.1,
+          transparent: true,
+          opacity: 0.85
+        }),
+        afterburnerGlow: new THREE.MeshBasicMaterial({
+          color: 0x00f0ff,
+          transparent: true,
+          opacity: 0.9
+        }),
+        amberGlow: new THREE.MeshBasicMaterial({
+          color: 0xff9900,
+          transparent: true,
+          opacity: 0.9
+        }),
+        wireframeMat: new THREE.MeshBasicMaterial({
+          color: 0x00f0ff,
+          wireframe: true
+        }),
+        blueprintMat: new THREE.MeshStandardMaterial({
+          color: 0x004466,
+          emissive: 0x0088aa,
+          emissiveIntensity: 0.45,
+          wireframe: false,
+          flatShading: true
+        }),
+        transportGrey: new THREE.MeshStandardMaterial({
+          color: 0x475569,
+          metalness: 0.55,
+          roughness: 0.45
+        }),
+        solarBlue: new THREE.MeshStandardMaterial({
+          color: 0x0a2540,
+          emissive: 0x003366,
+          emissiveIntensity: 0.4,
+          metalness: 0.85,
+          roughness: 0.15
+        }),
+        goldFoil: new THREE.MeshStandardMaterial({
+          color: 0xd97706,
+          metalness: 0.92,
+          roughness: 0.22
+        })
+      };
+    }
+
+    /**
+     * Build Detailed Procedural Stealth Fighter Jet (XF-29A / F/A-37)
+     */
+    function buildStealthFighter(mats) {
+      const jet = new THREE.Group();
+
+      // 1. Main Fuselage Spine
+      const fuselageGeo = new THREE.ConeGeometry(0.85, 7.2, 6);
+      fuselageGeo.rotateX(Math.PI / 2);
+      fuselageGeo.scale(1.35, 0.52, 1);
+      const fuselage = new THREE.Mesh(fuselageGeo, mats.stealthBody);
+      fuselage.position.set(0, 0, 0.4);
+      jet.add(fuselage);
+
+      // Rear Engine Housing
+      const rearBodyGeo = new THREE.BoxGeometry(1.65, 0.58, 3.2);
+      const rearBody = new THREE.Mesh(rearBodyGeo, mats.stealthBody);
+      rearBody.position.set(0, -0.02, -1.6);
+      jet.add(rearBody);
+
+      // 2. Cockpit Canopy
+      const canopyGeo = new THREE.SphereGeometry(0.52, 16, 12);
+      canopyGeo.scale(0.85, 0.65, 2.3);
+      const canopy = new THREE.Mesh(canopyGeo, mats.canopyGold);
+      canopy.position.set(0, 0.34, 1.1);
+      jet.add(canopy);
+
+      // 3. Swept Delta Main Wings (Custom Extruded Shape)
+      const wingShape = new THREE.Shape();
+      wingShape.moveTo(0, 1.2);
+      wingShape.lineTo(4.3, -1.4);
+      wingShape.lineTo(4.3, -2.2);
+      wingShape.lineTo(1.2, -2.5);
+      wingShape.lineTo(0, -2.2);
+      wingShape.closePath();
+
+      const extrudeSettings = { depth: 0.08, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.04, bevelSegments: 1 };
+      const wingGeo = new THREE.ExtrudeGeometry(wingShape, extrudeSettings);
+      wingGeo.rotateX(Math.PI / 2);
+
+      const rightWing = new THREE.Mesh(wingGeo, mats.stealthBody);
+      rightWing.position.set(0.4, 0.02, 0.1);
+      jet.add(rightWing);
+
+      const leftWing = rightWing.clone();
+      leftWing.scale.x = -1;
+      leftWing.position.set(-0.4, 0.02, 0.1);
+      jet.add(leftWing);
+
+      // 4. Twin Canted Vertical Stabilizers (Tail Fins)
+      const finShape = new THREE.Shape();
+      finShape.moveTo(0, 0);
+      finShape.lineTo(-1.3, 1.45);
+      finShape.lineTo(-1.8, 1.45);
+      finShape.lineTo(-1.5, 0);
+      finShape.closePath();
+
+      const finGeo = new THREE.ExtrudeGeometry(finShape, { depth: 0.05, bevelEnabled: false });
+      finGeo.rotateY(Math.PI / 2);
+
+      const rightFin = new THREE.Mesh(finGeo, mats.stealthBody);
+      rightFin.position.set(0.65, 0.2, -1.8);
+      rightFin.rotation.z = -0.32;
+      jet.add(rightFin);
+
+      const leftFin = new THREE.Mesh(finGeo, mats.stealthBody);
+      leftFin.position.set(-0.65, 0.2, -1.8);
+      leftFin.rotation.z = 0.32;
+      jet.add(leftFin);
+
+      // 5. Horizontal Stabilators
+      const stabGeo = new THREE.BoxGeometry(2.8, 0.06, 0.9);
+      const stabs = new THREE.Mesh(stabGeo, mats.darkTrim);
+      stabs.position.set(0, 0, -2.9);
+      jet.add(stabs);
+
+      // 6. Twin Engine Nozzles & Afterburner Plumes
+      const plumes = [];
+      [-0.45, 0.45].forEach((xPos) => {
+        const nozzleGeo = new THREE.CylinderGeometry(0.28, 0.34, 0.6, 12);
+        nozzleGeo.rotateX(Math.PI / 2);
+        const nozzle = new THREE.Mesh(nozzleGeo, mats.darkTrim);
+        nozzle.position.set(xPos, -0.02, -3.25);
+        jet.add(nozzle);
+
+        // Afterburner Cone
+        const flameGeo = new THREE.ConeGeometry(0.25, 1.8, 14);
+        flameGeo.rotateX(-Math.PI / 2);
+        const flame = new THREE.Mesh(flameGeo, mats.afterburnerGlow);
+        flame.position.set(xPos, -0.02, -4.25);
+        jet.add(flame);
+        plumes.push(flame);
+      });
+
+      // Wingtip Nav Lights
+      const leftLight = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff3355 }));
+      leftLight.position.set(-4.65, 0, -1.7);
+      jet.add(leftLight);
+
+      const rightLight = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
+      rightLight.position.set(4.65, 0, -1.7);
+      jet.add(rightLight);
+
+      jet.userData.plumes = plumes;
+      return jet;
+    }
+
+    /**
+     * Build Strategic Heavy Transport Aircraft (C-190 Titan Atlas)
+     */
+    function buildHeavyTransport(mats) {
+      const plane = new THREE.Group();
+
+      // Wide Body Fuselage
+      const bodyGeo = new THREE.CylinderGeometry(0.95, 0.95, 6.4, 20);
+      bodyGeo.rotateX(Math.PI / 2);
+      const body = new THREE.Mesh(bodyGeo, mats.transportGrey);
+      plane.add(body);
+
+      // Nose Cone
+      const noseGeo = new THREE.SphereGeometry(0.95, 20, 16);
+      noseGeo.scale(1, 0.95, 1.5);
+      const nose = new THREE.Mesh(noseGeo, mats.transportGrey);
+      nose.position.set(0, -0.05, 3.2);
+      plane.add(nose);
+
+      // Cockpit Windows
+      const cockpitGeo = new THREE.BoxGeometry(1.1, 0.35, 0.7);
+      const cockpit = new THREE.Mesh(cockpitGeo, mats.canopyGold);
+      cockpit.position.set(0, 0.45, 3.6);
+      plane.add(cockpit);
+
+      // High-Mounted Swept Wings
+      const wingGeo = new THREE.BoxGeometry(9.6, 0.14, 1.45);
+      const wings = new THREE.Mesh(wingGeo, mats.transportGrey);
+      wings.position.set(0, 0.75, 0.4);
+      plane.add(wings);
+
+      // Four Under-Wing Turbofan Nacelles
+      [-3.3, -1.7, 1.7, 3.3].forEach((x) => {
+        const podGeo = new THREE.CylinderGeometry(0.28, 0.24, 1.3, 14);
+        podGeo.rotateX(Math.PI / 2);
+        const pod = new THREE.Mesh(podGeo, mats.darkTrim);
+        pod.position.set(x, 0.45, 0.8);
+        plane.add(pod);
+
+        const intake = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.26, 14), mats.afterburnerGlow);
+        intake.position.set(x, 0.45, 1.46);
+        plane.add(intake);
+      });
+
+      // T-Tail Stabilizer
+      const vTailGeo = new THREE.BoxGeometry(0.16, 2.2, 1.4);
+      const vTail = new THREE.Mesh(vTailGeo, mats.transportGrey);
+      vTail.position.set(0, 1.6, -2.7);
+      vTail.rotation.x = -0.25;
+      plane.add(vTail);
+
+      const hTailGeo = new THREE.BoxGeometry(3.4, 0.12, 0.85);
+      const hTail = new THREE.Mesh(hTailGeo, mats.transportGrey);
+      hTail.position.set(0, 2.65, -3.0);
+      plane.add(hTail);
+
+      return plane;
+    }
+
+    /**
+     * Build Orbital ISR Reconnaissance Satellite (KH-14 Aegis Sentinel)
+     */
+    function buildReconSatellite(mats) {
+      const sat = new THREE.Group();
+
+      // Main Gold-Foil Bus Cylinder
+      const busGeo = new THREE.CylinderGeometry(0.95, 0.95, 3.2, 16);
+      busGeo.rotateZ(Math.PI / 2);
+      const bus = new THREE.Mesh(busGeo, mats.goldFoil);
+      sat.add(bus);
+
+      // Optical Telescope Aperture Lens
+      const lensHousing = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 1.1, 20), mats.darkTrim);
+      lensHousing.rotateZ(Math.PI / 2);
+      lensHousing.position.set(2.0, 0, 0);
+      sat.add(lensHousing);
+
+      const lensGlass = new THREE.Mesh(new THREE.CircleGeometry(0.75, 24), mats.afterburnerGlow);
+      lensGlass.rotateY(Math.PI / 2);
+      lensGlass.position.set(2.56, 0, 0);
+      sat.add(lensGlass);
+
+      // High-Gain Dish Antenna
+      const dishGeo = new THREE.SphereGeometry(0.7, 16, 12, 0, Math.PI * 2, 0, Math.PI / 3);
+      const dish = new THREE.Mesh(dishGeo, mats.transportGrey);
+      dish.position.set(-0.5, 1.35, 0);
+      dish.rotation.x = Math.PI;
+      sat.add(dish);
+
+      // Twin Solar Array Wings
+      [-1, 1].forEach((dir) => {
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 5.2, 8), mats.darkTrim);
+        arm.rotateX(Math.PI / 2);
+        arm.position.set(0, 0, dir * 2.8);
+        sat.add(arm);
+
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.05, 4.2), mats.solarBlue);
+        panel.position.set(0, 0, dir * 3.3);
+        sat.add(panel);
+      });
+
+      return sat;
+    }
+
+    // ==================== HERO 3D SCENE SETUP ====================
+    let heroScene, heroCamera, heroRenderer, heroJet, heroStars;
+    let heroTargetRotX = 0.22, heroTargetRotY = -0.65;
+    let heroCurrentRotX = 0.22, heroCurrentRotY = -0.65;
+    let heroZoom = 7.5;
+    let isHeroDragging = false, prevHeroMouse = { x: 0, y: 0 };
+    let afterburnerActive = true;
+    const heroMats = createMaterials();
+
+    function initHeroScene() {
+      const container = document.getElementById('hero-canvas-container');
+      if (!container) return;
+
+      heroScene = new THREE.Scene();
+      heroScene.fog = new THREE.FogExp2(0x040812, 0.035);
+
+      heroCamera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+      heroCamera.position.set(0, 1.4, heroZoom);
+
+      heroRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      heroRenderer.setSize(container.clientWidth, container.clientHeight);
+      heroRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(heroRenderer.domElement);
+
+      // Lighting
+      const ambient = new THREE.AmbientLight(0x38bdf8, 0.65);
+      heroScene.add(ambient);
+
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.6);
+      keyLight.position.set(6, 10, 8);
+      heroScene.add(keyLight);
+
+      const rimLight = new THREE.DirectionalLight(0x00f0ff, 1.4);
+      rimLight.position.set(-8, -4, -6);
+      heroScene.add(rimLight);
+
+      // Build Hero Jet
+      heroJet = buildStealthFighter(heroMats);
+      heroJet.position.set(1.6, 0.1, 0); // Offset slightly right for desktop balance
+      heroScene.add(heroJet);
+
+      // High-Altitude Starfield & Speed Particles
+      const starGeo = new THREE.BufferGeometry();
+      const starCount = 600;
+      const starPos = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount * 3; i += 3) {
+        starPos[i] = (Math.random() - 0.5) * 45;
+        starPos[i + 1] = (Math.random() - 0.5) * 30;
+        starPos[i + 2] = (Math.random() - 0.5) * 45;
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      const starMat = new THREE.PointsMaterial({ color: 0x7dd3fc, size: 0.09, transparent: true, opacity: 0.75 });
+      heroStars = new THREE.Points(starGeo, starMat);
+      heroScene.add(heroStars);
+
+      // Pointer & Touch Orbit Events
+      const dom = heroRenderer.domElement;
+      dom.addEventListener('mousedown', (e) => { isHeroDragging = true; prevHeroMouse = { x: e.clientX, y: e.clientY }; });
+      window.addEventListener('mouseup', () => { isHeroDragging = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!isHeroDragging) return;
+        const dx = e.clientX - prevHeroMouse.x;
+        const dy = e.clientY - prevHeroMouse.y;
+        heroTargetRotY += dx * 0.008;
+        heroTargetRotX = Math.max(-1.1, Math.min(1.1, heroTargetRotX + dy * 0.008));
+        prevHeroMouse = { x: e.clientX, y: e.clientY };
+      });
+
+      // Touch support
+      dom.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          isHeroDragging = true;
+          prevHeroMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+      }, { passive: true });
+      dom.addEventListener('touchend', () => { isHeroDragging = false; });
+      dom.addEventListener('touchmove', (e) => {
+        if (!isHeroDragging || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - prevHeroMouse.x;
+        const dy = e.touches[0].clientY - prevHeroMouse.y;
+        heroTargetRotY += dx * 0.01;
+        heroTargetRotX = Math.max(-1.1, Math.min(1.1, heroTargetRotX + dy * 0.01));
+        prevHeroMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }, { passive: true });
+
+      // Zoom via Wheel
+      dom.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        heroZoom = Math.max(4.2, Math.min(12, heroZoom + e.deltaY * 0.004));
+      }, { passive: false });
+
+      adjustHeroLayout();
+    }
+
+    function adjustHeroLayout() {
+      if (!heroJet) return;
+      if (window.innerWidth < 1024) {
+        heroJet.position.set(0, -0.4, 0);
+      } else {
+        heroJet.position.set(1.7, 0.1, 0);
+      }
+    }
+
+    // Hero Visual Mode Controls
+    function setHeroMode(mode) {
+      if (!heroJet) return;
+      const btns = ['stealth', 'wireframe', 'blueprint'];
+      btns.forEach((b) => {
+        const el = document.getElementById(`btn-hero-${b}`);
+        if (b === mode) {
+          el.className = "px-3.5 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider bg-hud-cyan text-navy-950 shadow-lg shadow-cyan-500/25 transition";
+        } else {
+          el.className = "px-3.5 py-2 rounded-lg font-mono text-xs font-semibold uppercase tracking-wider bg-navy-800/90 text-slate-200 border border-cyan-500/30 hover:border-hud-cyan transition";
+        }
+      });
+
+      heroJet.traverse((child) => {
+        if (child.isMesh && !heroJet.userData.plumes.includes(child)) {
+          if (mode === 'wireframe') {
+            child.material = heroMats.wireframeMat;
+          } else if (mode === 'blueprint') {
+            child.material = heroMats.blueprintMat;
+          } else {
+            // Restore original materials
+            child.material = child.geometry.type === 'SphereGeometry' && child.scale.z > 2
+              ? heroMats.canopyGold
+              : heroMats.stealthBody;
+          }
+        }
+      });
+    }
+
+    function toggleAfterburner() {
+      afterburnerActive = !afterburnerActive;
+      const btn = document.getElementById('btn-hero-afterburner');
+      const thrustEl = document.getElementById('hero-thrust');
+      if (afterburnerActive) {
+        btn.textContent = 'Afterburner: MAX';
+        thrustEl.textContent = '108% MIL-PWR';
+        thrustEl.className = 'text-hud-amber';
+      } else {
+        btn.textContent = 'Afterburner: CRUISE';
+        thrustEl.textContent = '78% DRY-THRUST';
+        thrustEl.className = 'text-hud-cyan';
+      }
+    }
+
+    // ==================== FLEET HANGAR 3D VIEWER SETUP ====================
+    let hangarScene, hangarCamera, hangarRenderer, hangarGroup, hangarGrid;
+    let hangarAutoRotate = true;
+    let hangarRotX = 0.25, hangarRotY = 0.6;
+    let hangarZoom = 7.2;
+    let isHangarDragging = false, prevHangarMouse = { x: 0, y: 0 };
+    const hangarMats = createMaterials();
+
+    const FLEET_DATA = {
+      fighter: {
+        code: 'XF-37-BLK4',
+        title: 'F/A-37 VANGUARD STEALTH',
+        status: 'ACTIVE SERVICE',
+        desc: 'Twin-engine, all-weather tactical stealth fighter engineered for air dominance, electronic warfare, and deep-strike precision missions with vectored thrust nozzles.',
+        speed: 'MACH 2.45 (1,880 MPH)',
+        speedPct: '92%',
+        ceiling: '65,000 FT (19.8 KM)',
+        ceilingPct: '85%',
+        range: '1,850 NMI',
+        rangePct: '74%',
+        avionics: 'AN/APG-99 AESA Radar • Distributed Aperture Infrared System • AI Wingman Data-Link'
+      },
+      transport: {
+        code: 'C-190-ATLAS',
+        title: 'C-190 TITAN ATLAS',
+        status: 'GLOBAL AIRLIFT',
+        desc: 'Strategic heavy-lift transport capable of rapid tactical delivery of armored vehicles, troops, and humanitarian cargo onto austere forward runways.',
+        speed: 'MACH 0.82 (540 MPH)',
+        speedPct: '52%',
+        ceiling: '45,000 FT (13.7 KM)',
+        ceilingPct: '62%',
+        range: '5,200 NMI',
+        rangePct: '95%',
+        avionics: 'Terrain-Following Synthetic Vision • Automated Aerial Drop Computer • Defensive IRCM'
+      },
+      satellite: {
+        code: 'KH-14-AEGIS',
+        title: 'KH-14 AEGIS SENTINEL',
+        status: 'LEO ORBITAL',
+        desc: 'Low-Earth-Orbit electro-optical and synthetic aperture reconnaissance satellite providing real-time sub-meter battlefield intelligence and encrypted laser relay.',
+        speed: '17,500 MPH (ORBITAL)',
+        speedPct: '100%',
+        ceiling: '340 MILES (550 KM)',
+        ceilingPct: '100%',
+        range: 'GLOBAL COVERAGE',
+        rangePct: '100%',
+        avionics: 'Hyperspectral Multi-Band Telescope • Optical Laser Crosslink • Ion Thruster Stationkeeping'
+      }
+    };
+
+    function initHangarScene() {
+      const container = document.getElementById('hangar-canvas-container');
+      if (!container) return;
+
+      hangarScene = new THREE.Scene();
+      hangarCamera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+      hangarCamera.position.set(0, 2.2, hangarZoom);
+
+      hangarRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      hangarRenderer.setSize(container.clientWidth, container.clientHeight);
+      hangarRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(hangarRenderer.domElement);
+
+      // Hangar Lighting
+      hangarScene.add(new THREE.AmbientLight(0x94a3b8, 0.7));
+      const spotTop = new THREE.DirectionalLight(0xffffff, 1.5);
+      spotTop.position.set(5, 12, 7);
+      hangarScene.add(spotTop);
+
+      const cyanFill = new THREE.PointLight(0x00f0ff, 1.5, 20);
+      cyanFill.position.set(-5, 2, 5);
+      hangarScene.add(cyanFill);
+
+      // Tactical Holographic Grid Floor
+      hangarGrid = new THREE.GridHelper(14, 24, 0x00f0ff, 0x13254a);
+      hangarGrid.position.y = -1.6;
+      hangarScene.add(hangarGrid);
+
+      hangarGroup = new THREE.Group();
+      hangarScene.add(hangarGroup);
+
+      // Load Initial Model
+      loadHangarModel('fighter');
+
+      // Hangar Orbit Controls
+      const dom = hangarRenderer.domElement;
+      dom.addEventListener('mousedown', (e) => { isHangarDragging = true; prevHangarMouse = { x: e.clientX, y: e.clientY }; });
+      window.addEventListener('mouseup', () => { isHangarDragging = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!isHangarDragging) return;
+        const dx = e.clientX - prevHangarMouse.x;
+        const dy = e.clientY - prevHangarMouse.y;
+        hangarRotY += dx * 0.01;
+        hangarRotX = Math.max(-0.9, Math.min(1.1, hangarRotX + dy * 0.01));
+        prevHangarMouse = { x: e.clientX, y: e.clientY };
+      });
+
+      dom.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          isHangarDragging = true;
+          prevHangarMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+      }, { passive: true });
+      dom.addEventListener('touchend', () => { isHangarDragging = false; });
+      dom.addEventListener('touchmove', (e) => {
+        if (!isHangarDragging || e.touches.length !== 1) return;
+        const dx = e.touches[0].clientX - prevHangarMouse.x;
+        const dy = e.touches[0].clientY - prevHangarMouse.y;
+        hangarRotY += dx * 0.012;
+        hangarRotX = Math.max(-0.9, Math.min(1.1, hangarRotX + dy * 0.012));
+        prevHangarMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }, { passive: true });
+
+      dom.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        hangarZoom = Math.max(4.0, Math.min(13, hangarZoom + e.deltaY * 0.004));
+      }, { passive: false });
+    }
+
+    function loadHangarModel(type) {
+      while (hangarGroup.children.length > 0) {
+        hangarGroup.remove(hangarGroup.children[0]);
+      }
+
+      let mesh;
+      if (type === 'fighter') mesh = buildStealthFighter(hangarMats);
+      else if (type === 'transport') mesh = buildHeavyTransport(hangarMats);
+      else mesh = buildReconSatellite(hangarMats);
+
+      hangarGroup.add(mesh);
+    }
+
+    function selectFleetAsset(type) {
+      // Update Tab UI
+      document.querySelectorAll('.fleet-tab').forEach((tab) => {
+        tab.classList.remove('border-2', 'border-hud-cyan');
+        tab.classList.add('border', 'border-cyan-500/20');
+      });
+      const activeTab = document.getElementById(`tab-${type}`);
+      if (activeTab) {
+        activeTab.classList.remove('border', 'border-cyan-500/20');
+        activeTab.classList.add('border-2', 'border-hud-cyan');
+      }
+
+      // Update Spec Readouts
+      const data = FLEET_DATA[type];
+      document.getElementById('hangar-model-code').textContent = data.code;
+      document.getElementById('spec-title').textContent = data.title;
+      document.getElementById('spec-status').textContent = data.status;
+      document.getElementById('spec-desc').textContent = data.desc;
+      document.getElementById('spec-speed').textContent = data.speed;
+      document.getElementById('bar-speed').style.width = data.speedPct;
+      document.getElementById('spec-ceiling').textContent = data.ceiling;
+      document.getElementById('bar-ceiling').style.width = data.ceilingPct;
+      document.getElementById('spec-range').textContent = data.range;
+      document.getElementById('bar-range').style.width = data.rangePct;
+      document.getElementById('spec-avionics').textContent = data.avionics;
+
+      loadHangarModel(type);
+    }
+
+    function toggleHangarAutoRotate() {
+      hangarAutoRotate = !hangarAutoRotate;
+      document.getElementById('btn-hangar-rotate').textContent = `AUTO-ORBIT: ${hangarAutoRotate ? 'ON' : 'OFF'}`;
+    }
+
+    function resetHangarCamera() {
+      hangarRotX = 0.25;
+      hangarRotY = 0.6;
+      hangarZoom = 7.2;
+    }
+
+    // ==================== FLIGHT TELEMETRY SIMULATOR LOGIC ====================
+    function updateFlightTelemetry() {
+      const throttle = parseInt(document.getElementById('slider-throttle').value, 10);
+      const altitude = parseInt(document.getElementById('slider-altitude').value, 10);
+      const heading = parseInt(document.getElementById('slider-heading').value, 10);
+
+      document.getElementById('val-throttle').textContent = `${throttle}%`;
+      document.getElementById('val-altitude').textContent = `${altitude.toLocaleString()} FT`;
+      document.getElementById('val-heading').textContent = `${String(heading).padStart(3, '0')}°`;
+
+      // Derived Physics Calculations
+      const knots = Math.round(320 + (throttle - 30) * 14.5 + (altitude / 65000) * 180);
+      const speedOfSound = 661 - (altitude / 1000) * 1.4;
+      const mach = (knots / speedOfSound).toFixed(2);
+      const gForce = (1.0 + Math.abs(throttle - 75) * 0.025).toFixed(1);
+      const fuelFlow = Math.round(3200 + Math.pow(throttle / 10, 2.2) * 320);
+
+      const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+      const cardinal = dirs[Math.round(heading / 22.5) % 16];
+
+      document.getElementById('hud-airspeed').textContent = `${knots.toLocaleString()} KT`;
+      document.getElementById('hud-mach').textContent = `MACH ${mach}`;
+      document.getElementById('hud-altitude').textContent = `${altitude.toLocaleString()} FT`;
+      document.getElementById('hud-heading').textContent = `${String(heading).padStart(3, '0')}° ${cardinal}`;
+      document.getElementById('hud-gforce').textContent = `${gForce} G`;
+      document.getElementById('hud-fuel').textContent = `FLOW: ${fuelFlow.toLocaleString()} PPH`;
+
+      const badge = document.getElementById('flight-regime-badge');
+      if (mach >= 2.0) {
+        badge.textContent = 'HIGH-SUPERSONIC INTERCEPT';
+        badge.className = 'px-3 py-1 rounded-md bg-amber-500/20 border border-amber-400/50 font-mono text-xs text-hud-amber';
+      } else if (mach >= 1.2) {
+        badge.textContent = 'SUPERCRUISE';
+        badge.className = 'px-3 py-1 rounded-md bg-cyan-500/15 border border-cyan-400/40 font-mono text-xs text-hud-cyan';
+      } else {
+        badge.textContent = 'SUBSONIC PATROL';
+        badge.className = 'px-3 py-1 rounded-md bg-emerald-500/15 border border-emerald-400/40 font-mono text-xs text-emerald-400';
+      }
+    }
+
+    // ==================== MAIN ANIMATION LOOP & RESIZE HANDLER ====================
+    let clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsed = clock.getElapsedTime();
+
+      // 1. Animate Hero Scene
+      if (heroRenderer && heroScene && heroCamera && heroJet) {
+        heroCurrentRotX += (heroTargetRotX - heroCurrentRotX) * 0.08;
+        heroCurrentRotY += (heroTargetRotY - heroCurrentRotY) * 0.08;
+
+        // Subtle aerodynamic banking oscillation
+        const idleRoll = Math.sin(elapsed * 1.4) * 0.08;
+        const idlePitch = Math.cos(elapsed * 1.1) * 0.04;
+
+        heroJet.rotation.x = heroCurrentRotX + idlePitch;
+        heroJet.rotation.y = heroCurrentRotY + Math.sin(elapsed * 0.4) * 0.12;
+        heroJet.rotation.z = idleRoll;
+
+        // Pulse Afterburners
+        if (heroJet.userData.plumes) {
+          heroJet.userData.plumes.forEach((flame) => {
+            if (afterburnerActive) {
+              flame.visible = true;
+              const flicker = 0.9 + Math.sin(elapsed * 35) * 0.18;
+              flame.scale.set(1, flicker, 1);
+            } else {
+              flame.visible = false;
+            }
+          });
+        }
+
+        // Move Starfield Past Aircraft for High-Speed Illusion
+        if (heroStars) {
+          const positions = heroStars.geometry.attributes.position.array;
+          for (let i = 2; i < positions.length; i += 3) {
+            positions[i] -= 0.35;
+            if (positions[i] < -22) positions[i] = 22;
+          }
+          heroStars.geometry.attributes.position.needsUpdate = true;
+        }
+
+        heroCamera.position.z += (heroZoom - heroCamera.position.z) * 0.1;
+        heroRenderer.render(heroScene, heroCamera);
+
+        // Update Live Attitude HUD
+        const pitchDeg = ((heroJet.rotation.x * 180) / Math.PI).toFixed(1);
+        const rollDeg = ((heroJet.rotation.z * 180) / Math.PI).toFixed(1);
+        const attEl = document.getElementById('hero-attitude');
+        if (attEl) attEl.textContent = `${pitchDeg >= 0 ? '+' : ''}${pitchDeg}° / ${rollDeg >= 0 ? '+' : ''}${rollDeg}°`;
+      }
+
+      // 2. Animate Hangar Scene
+      if (hangarRenderer && hangarScene && hangarCamera && hangarGroup) {
+        if (hangarAutoRotate && !isHangarDragging) {
+          hangarRotY += 0.006;
+        }
+        hangarGroup.rotation.x += (hangarRotX - hangarGroup.rotation.x) * 0.1;
+        hangarGroup.rotation.y += (hangarRotY - hangarGroup.rotation.y) * 0.1;
+        hangarGroup.position.y = Math.sin(elapsed * 1.8) * 0.08;
+
+        hangarCamera.position.z += (hangarZoom - hangarCamera.position.z) * 0.1;
+        hangarRenderer.render(hangarScene, hangarCamera);
+      }
+    }
+
+    function handleResize() {
+      const heroContainer = document.getElementById('hero-canvas-container');
+      if (heroContainer && heroRenderer && heroCamera) {
+        heroCamera.aspect = heroContainer.clientWidth / heroContainer.clientHeight;
+        heroCamera.updateProjectionMatrix();
+        heroRenderer.setSize(heroContainer.clientWidth, heroContainer.clientHeight);
+        adjustHeroLayout();
+      }
+
+      const hangarContainer = document.getElementById('hangar-canvas-container');
+      if (hangarContainer && hangarRenderer && hangarCamera) {
+        hangarCamera.aspect = hangarContainer.clientWidth / hangarContainer.clientHeight;
+        hangarCamera.updateProjectionMatrix();
+        hangarRenderer.setSize(hangarContainer.clientWidth, hangarContainer.clientHeight);
+      }
+    }
+
+    window.addEventListener('resize', handleResize);
+
+    window.onload = function () {
+      initHeroScene();
+      initHangarScene();
+      updateFlightTelemetry();
+      animate();
+    };
+  </script>
+</body>
+</html>
